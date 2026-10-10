@@ -107,8 +107,8 @@ input{width:100%;padding:12px;border-radius:10px;border:1px solid rgba(255,255,2
 <div id="skins" class="modal"><div class="panel"><h2>SKINS ARCADE</h2><div class="sub">Époque : <span id="arcadeEraName"></span></div><div id="skinList"></div><button class="btn main" onclick="UI.launchArcade()">LANCER L’ARCADE</button><button class="btn" onclick="UI.back()">RETOUR</button></div></div>
 <div id="board" class="modal"><div class="panel">
   <h2>CLASSEMENT</h2>
-  <div class="sub">Pseudo 8 lettres</div>
-  <input id="pseudo" maxlength="8" placeholder="ABCDEFGH">
+  <div class="sub">Nom (15 caractères maximum)</div>
+  <input id="pseudo" maxlength="15" placeholder="JOUEUR">
   <button class="btn sm main" onclick="Rank.setPseudo()">ENREGISTRER LE PSEUDO</button>
   <div id="rankList"></div>
   <button class="btn" onclick="UI.back()">RETOUR</button>
@@ -150,10 +150,17 @@ input{width:100%;padding:12px;border-radius:10px;border:1px solid rgba(255,255,2
 </div></div>
 <div id="toast"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 /* ============ CONFIG ============ */
 // Remplacez cette URL par votre lien PayPal (ou utilisez https://paypal.me/PSEUDO).
 const PAYPAL_DONATE_URL = 'https://paypal.me/licornebreton';
+// Configuration Supabase (remplacez ces valeurs par celles de votre projet).
+// Si elles restent inchangées, le classement local est utilisé automatiquement.
+const SUPABASE_URL = 'https://esbfxlupnacdbsvghrgw.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_XOa8tjstZQR9VvB-_k6svw_k9ylb9si';
+const SUPABASE_CONFIGURED = SUPABASE_URL !== 'https://esbfxlupnacdbsvghrgw.supabase.co' && SUPABASE_KEY !== 'sb_publishable_XOa8tjstZQR9VvB-_k6svw_k9ylb9si';
+const SupabaseClient = (() => { try { return SUPABASE_CONFIGURED && window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null; } catch (e) { return null; } })();
 const SALT = 'TR_s4lt_9f3b_2026';
 const LEVEL_GOALS = [500,1000,2000,2500,3000,4000,5000,6000,8000,10000];
 const UNLOCK_TIME = [0,5*30,10*30,20*30,40*30,50*30,60*30,70*30,80*30,90*30];
@@ -341,7 +348,7 @@ const Game={
     this.last = performance.now();
   },
   loop(t){
-    if (!G.on) return;
+    if (!G.on && !G.deathAnim) return;
     let dt = Math.min((t - this.last) / 1000, 0.05);
     this.last = t;
     if (!G.paused && !G.portal && !G.deathAnim) {
@@ -401,7 +408,7 @@ const Game={
  burst(o,col,n=12){const p=this.pos(o.a,o.r);for(let i=0;i<n;i++){const an=Math.random()*7,s=60+Math.random()*120;G.parts.push({x:p.x,y:p.y,vx:Math.cos(an)*s,vy:Math.sin(an)*s,l:.5+Math.random()*.4,c:col})}},
  showCombo(t){const el=document.getElementById('combo');el.textContent=t;el.classList.add('on');G.comboT=0.7},
  switchRing(dir){if(!G.on||G.paused)return;const nr=G.ring+dir;if(nr<0||nr>=G.rings)return;G.prevRing=G.ring;G.ring=nr;G.lastSwitch=0;Snd.play(300+nr*80,.06,'sine',.06)},
- die(){G.combo=0;G.shake=1;G.flash=.6;Snd.hit();vib([80,40,120]);this.burst({a:G.angle,r:G.ringPos},'#ff4fa3',24);G.deathAnim={type:['particles','pixels','blackhole','bounce','shockwave'][Math.floor(Math.random()*5)],duration:1200};G.deathStart=performance.now();Save.d.coins+=G.coinsRun;if(G.score>Save.d.best)Save.d.best=G.score|0;Rank.submit(G.score|0);Save.save();document.getElementById('oScore').textContent=G.score|0;document.getElementById('oCoins').textContent=G.coinsRun;document.getElementById('oPerf').textContent=G.perfects;document.getElementById('oCombo').textContent=G.maxCombo;const rb=document.getElementById('reviveBox');rb.innerHTML='';if(!G.revived)rb.innerHTML=`<button class="btn pink" onclick="Game.revive()" ${Save.d.coins<REVIVE_COST?'disabled':''}>SECONDE CHANCE (${REVIVE_COST} pièces)</button><div class="hint">Vous avez ${Save.d.coins} pièces</div>`;G.on=false;G.deathTimer=setTimeout(()=>{if(!G.deathAnim) return;G.deathAnim=null;UI.open('over')},1200);this.draw(0)},
+ die(){G.combo=0;G.shake=1;G.flash=.6;Snd.hit();vib([80,40,120]);this.burst({a:G.angle,r:G.ringPos},'#ff4fa3',24);G.deathAnim={type:['particles','pixels','blackhole','bounce','shockwave'][Math.floor(Math.random()*5)],duration:1400};G.deathStart=performance.now();Save.d.coins+=G.coinsRun;if(G.score>Save.d.best)Save.d.best=G.score|0;Rank.submit(G.score|0);Save.save();document.getElementById('oScore').textContent=G.score|0;document.getElementById('oCoins').textContent=G.coinsRun;document.getElementById('oPerf').textContent=G.perfects;document.getElementById('oCombo').textContent=G.maxCombo;const rb=document.getElementById('reviveBox');rb.innerHTML='';if(!G.revived)rb.innerHTML=`<button class="btn pink" onclick="Game.revive()" ${Save.d.coins<REVIVE_COST?'disabled':''}>SECONDE CHANCE (${REVIVE_COST} pièces)</button><div class="hint">Vous avez ${Save.d.coins} pièces</div>`;G.on=false;G.deathTimer=setTimeout(()=>{if(!G.deathAnim) return;G.deathAnim=null;UI.open('over')},1400);this.draw(0)},
  revive(){if(G.revived)return;clearTimeout(G.deathTimer);G.deathAnim=null;document.querySelectorAll(".modal.on").forEach(m=>m.classList.remove("on"));if(Save.d.coins<REVIVE_COST)return;Save.d.coins-=REVIVE_COST;G.revived=true;Save.save();document.querySelectorAll('.modal.on').forEach(m=>m.classList.remove('on'));document.getElementById('hud').classList.add('on');document.getElementById('btnPause').classList.add('on');
   G.obs=G.obs.filter(o=>o.a-G.angle>1.2);G.shield=3;G.on=true;G.paused=false;this.last=performance.now();Snd.power();this.raf=requestAnimationFrame(t=>this.loop(t))},
  win(){G.on=false;Snd.win();vib([60,60,60,60,200]);const bonus=500+G.combo*20;G.score+=bonus;Save.d.coins+=G.coinsRun+100;
@@ -440,7 +447,7 @@ const Game={
   for(const p of G.parts){ctx.globalAlpha=p.l;ctx.fillStyle=p.c;ctx.beginPath();ctx.arc(p.x,p.y,3,0,7);ctx.fill()}
   ctx.globalAlpha=1;ctx.restore();
   if(G.flash>0){ctx.fillStyle=`rgba(255,255,255,${G.flash})`;ctx.fillRect(0,0,W,H)}
-  if(G.deathAnim){ctx.save();ctx.translate(W/2,H/2+20);ctx.globalCompositeOperation='lighter';const q=Math.min(1,(performance.now()-G.deathStart)/1200),d=G.deathAnim.type;for(let i=0;i<48;i++){const a=i*.73,r=q*(20+i*2.2);ctx.fillStyle=i%2?'#ff4fa3':'#ffd25a';if(d==='blackhole'){ctx.strokeStyle='#8fa9ff';ctx.beginPath();ctx.arc(0,0,10+i*3*(1-q),a,a+1.7);ctx.stroke()}else if(d==='shockwave'){ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(Math.cos(a)*r*2,Math.sin(a)*r*2);ctx.stroke()}else ctx.fillRect(Math.cos(a)*r,Math.sin(a)*r,d==='pixels'?8:5,d==='pixels'?8:5)}ctx.restore()}
+  if(G.deathAnim){const deathElapsed=performance.now()-G.deathStart,q=Math.min(1,deathElapsed/G.deathAnim.duration),d=G.deathAnim.type,ease=1-Math.pow(1-q,3),cx=W/2,cy=H/2+20;ctx.save();ctx.globalCompositeOperation='lighter';ctx.translate(cx,cy);ctx.lineCap='round';if(d==='particles'){for(let i=0;i<72;i++){const a=i*.618,rad=ease*(35+(i%12)*12),sz=5+(i%4)*2;ctx.fillStyle=i%2?'#ff4fa3':'#ffd25a';ctx.globalAlpha=1-q*.35;ctx.beginPath();ctx.arc(Math.cos(a)*rad,Math.sin(a)*rad,sz,0,7);ctx.fill()}}else if(d==='pixels'){for(let i=0;i<44;i++){const a=i*.91,rad=ease*(25+(i%9)*16),sz=8+(i%3)*4;ctx.save();ctx.rotate(a+q*4);ctx.fillStyle=i%2?'#00e5ff':'#ff4fa3';ctx.fillRect(Math.cos(a)*rad-sz/2,Math.sin(a)*rad-sz/2,sz,sz);ctx.restore()}}else if(d==='blackhole'){ctx.fillStyle='rgba(4,2,18,.95)';ctx.beginPath();ctx.arc(0,0,28+ease*22,0,7);ctx.fill();for(let i=0;i<7;i++){ctx.strokeStyle=i%2?'#8fa9ff':'#ff4fa3';ctx.lineWidth=4-i*.3;ctx.beginPath();ctx.arc(0,0,45+ease*55+i*9,i*.8+q*5,i*.8+q*5+2.5);ctx.stroke()}}else if(d==='bounce'){const y=-Math.abs(Math.sin(q*Math.PI*3))*80*(1-q),scale=1+Math.sin(q*Math.PI*4)*.18;ctx.save();ctx.translate(0,y);ctx.scale(scale,scale);ctx.strokeStyle='#ffd25a';ctx.lineWidth=8;ctx.beginPath();ctx.arc(0,0,38+q*32,0,7);ctx.stroke();ctx.restore();for(let i=0;i<12;i++){ctx.strokeStyle='#ff4fa3';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(Math.cos(i)*50,Math.sin(i)*50);ctx.lineTo(Math.cos(i)*(75+q*45),Math.sin(i)*(75+q*45));ctx.stroke()}}else{for(let i=0;i<4;i++){ctx.strokeStyle=i%2?'#ff4fa3':'#ffd25a';ctx.lineWidth=10-i;ctx.globalAlpha=1-q;ctx.beginPath();ctx.arc(0,0,(25+i*22)+ease*170,0,7);ctx.stroke()}}ctx.restore();ctx.fillStyle=`rgba(255,20,45,${Math.max(0,0.48*(1-q))})`;ctx.fillRect(0,0,W,H)}
   if(G.eraShow>0){ctx.fillStyle=`rgba(255,255,255,${G.eraShow})`;ctx.font='bold 36px sans-serif';ctx.textAlign='center';ctx.fillText(e.name.toUpperCase(),W/2,H/3)}
  },
  drawBg(e){
@@ -517,7 +524,7 @@ const UI={
   this.open('settings');
  },
  openBoard(){
-  document.getElementById('pseudo').value=Save.d.pseudo;Rank.render();this.open('board');
+  document.getElementById('pseudo').value=Save.d.pseudo;this.open('board');Rank.render();
  }
 };
 
@@ -526,24 +533,9 @@ const Settings={
 };
 
 const Rank={
- submit(sc){
-  if(sc<=0)return;
-  const p=Save.d.pseudo||'VIDE';
-  Save.d.scores.push({p,s:sc});
-  Save.d.scores.sort((a,b)=>b.s-a.s);
-  if(Save.d.scores.length>10)Save.d.scores.length=10;
- },
- setPseudo(){
-  const p=document.getElementById('pseudo').value.toUpperCase().replace(/[^A-Z]/g,'').substring(0,5);
-  if(p.length>=3){Save.d.pseudo=p;Save.save();UI.toast('Pseudo enregistré !');this.render();}
- },
- render(){
-  const l=document.getElementById('rankList');l.innerHTML='';
-  if(Save.d.scores.length===0){l.innerHTML='<div class="sub">Jouez une partie pour vous classer !</div>';return;}
-  Save.d.scores.forEach((sc,i)=>{
-   l.innerHTML+=`<div class="rank ${sc.p===Save.d.pseudo?'me':''}"><div class="n">#${i+1}</div><div class="p">${sc.p}</div><div class="s">${sc.s}</div></div>`;
-  });
- }
+ async submit(sc){if(sc<=0)return;const name=(Save.d.pseudo||'VIDE').substring(0,15);Save.d.scores.push({p:name,s:sc});Save.d.scores.sort((a,b)=>b.s-a.s);if(Save.d.scores.length>10)Save.d.scores.length=10;try{if(SupabaseClient)await SupabaseClient.from('scores').insert({name,score:sc|0});}catch(e){/* repli local */}},
+ setPseudo(){const p=document.getElementById('pseudo').value.trim().substring(0,15);if(p.length>=1){Save.d.pseudo=p;Save.save();UI.toast('Pseudo enregistré !');this.render();}},
+ async render(){const l=document.getElementById('rankList');l.innerHTML='<div class="sub">Chargement...</div>';let rows=null;try{if(SupabaseClient){const r=await SupabaseClient.from('scores').select('name,score').order('score',{ascending:false}).limit(10);if(r.error)throw r.error;rows=(r.data||[]).map(x=>({p:String(x.name||'VIDE').substring(0,15),s:Number(x.score)||0}));}}catch(e){rows=null;}if(!rows)rows=Save.d.scores;l.innerHTML='';if(rows.length===0){l.innerHTML='<div class="sub">Jouez une partie pour vous classer !</div>';return;}rows.forEach((sc,i)=>{l.innerHTML+=`<div class="rank ${sc.p===Save.d.pseudo?'me':''}"><div class="n">#${i+1}</div><div class="p">${String(sc.p).replace(/[&<>"']/g,'')}</div><div class="s">${sc.s}</div></div>`;});}
 };
 
 const LvlUI={
@@ -573,6 +565,7 @@ window.onload=async()=>{
  const intro=document.getElementById('studioIntro');const finish=()=>{intro.classList.add('hide');if(!localStorage.getItem('tr_tutorial_seen')){localStorage.setItem('tr_tutorial_seen','1');setTimeout(()=>UI.openTutorial(),850)}};intro.addEventListener('click',finish,{once:true});setTimeout(finish,2900);
 };
 </script>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4bc70e2c01a94c73b74392e4234840661791215815920" integrity="sha512-L0ha0OXavK/8okipN9F8BtP84dg9DUhPERbBXzwI6dgTA55d2+yweo3pn5CSFYs45/r8md2+xvUPtTdvTNRfjA==" data-cf-beacon='{"version":"2024.11.0","token":"8607d2a720d14b038279025b2b5a82e5","spa":2}' crossorigin="anonymous"></script>
 <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4bc70e2c01a94c73b74392e4234840661791215815920" integrity="sha512-L0ha0OXavK/8okipN9F8BtP84dg9DUhPERbBXzwI6dgTA55d2+yweo3pn5CSFYs45/r8md2+xvUPtTdvTNRfjA==" data-cf-beacon='{"version":"2024.11.0","token":"8607d2a720d14b038279025b2b5a82e5","spa":2}' crossorigin="anonymous"></script>
 </body>
 </html>
