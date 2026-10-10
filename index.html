@@ -108,7 +108,7 @@ input{width:100%;padding:12px;border-radius:10px;border:1px solid rgba(255,255,2
 <div id="board" class="modal"><div class="panel">
   <h2>CLASSEMENT</h2>
   <div class="sub">Pseudo 8 lettres</div>
-  <input id="pseudo" maxlength="8" placeholder="ABCDE">
+  <input id="pseudo" maxlength="8" placeholder="ABCDEFGH">
   <button class="btn sm main" onclick="Rank.setPseudo()">ENREGISTRER LE PSEUDO</button>
   <div id="rankList"></div>
   <button class="btn" onclick="UI.back()">RETOUR</button>
@@ -528,7 +528,7 @@ const Settings={
 const Rank={
  submit(sc){
   if(sc<=0)return;
-  const p=Save.d.pseudo||'ANON';
+  const p=Save.d.pseudo||'VIDE';
   Save.d.scores.push({p,s:sc});
   Save.d.scores.sort((a,b)=>b.s-a.s);
   if(Save.d.scores.length>10)Save.d.scores.length=10;
