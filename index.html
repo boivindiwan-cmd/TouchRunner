@@ -980,7 +980,12 @@ const Boss={
   const fill=document.querySelector('#bossBar i');if(fill)fill.style.width=Math.max(0,(9-(b.round-1)*3-b.roundHits)/9*100)+'%';
   if(b.spawn<=0){b.spawn=([1.15,.78,.58][ph-1])*(1-.06*(b.round-1));const k=(Math.floor(b.t*3)+b.era+b.round)%G.rings;if(b.era===11){b.lane=(b.lane+1+Math.floor(Math.random()*Math.max(1,G.rings-1)))%G.rings;b.truckA=G.angle+1.55;this.add(b.lane,1.55,{bomb:true,laneBase:b.lane,truckBomb:true});if(ph>1)this.add((b.lane+1)%G.rings,1.9,{bomb:true,laneBase:(b.lane+1)%G.rings})}else if(b.era%4===0){this.add(k,1.1);if(ph>1)this.add((k+1)%G.rings,1.24)}else if(b.era%4===1){this.add(k,1.2);if(ph>1)this.add((k+2)%G.rings,1.34)}else if(b.era%4===2){this.add((k+Math.floor(b.t))%G.rings,1.0);this.add((k+1)%G.rings,1.18)}else{this.add(k,1.25);if(ph>=2)this.add((k+1)%G.rings,1.45)}}},
    draw(){if(!G.boss)return;const b=G.boss,cx=W/2,cy=H/2-78,bob=Math.sin(b.pulse)*4;
-    if(b.era===10){
+    /* Story eras 0..9 must always use the procedural illustrated renderer.
+       Keep this branch first and explicit: image-backed BossArt is asynchronous
+       and its false return used to expose the old generic star/smiley fallback. */
+    if(Number.isInteger(b.era)&&b.era>=0&&b.era<=9){
+      BossArtRich.draw(b.era,this.colors[b.era]);
+    }else if(b.era===10){
       // Caine : silhouette de maître de cérémonie, couleurs plates et contours nets.
       ctx.save();ctx.translate(cx,cy+bob);ctx.lineJoin='round';ctx.lineCap='round';
       const ink='#17121d',burg='#b0123f',burgDark='#760d2c',white='#fffdf4',gold='#d7a93b';
@@ -1017,9 +1022,7 @@ const Boss={
       oval(-27+look,-59,2,2,white,null,0);oval(23+look,-59,2,2,white,null,0);
       ctx.restore();
     }else if(b.era===11){ctx.save();ctx.translate(cx,cy+bob);ctx.globalCompositeOperation='source-over';const tp=Game.pos(b.truckA,b.lane);ctx.restore();const tp2=Game.pos(b.truckA,b.lane);ctx.save();ctx.translate(tp2.x,tp2.y-24+bob);ctx.scale(1.15,1.15);drawArmoredTruck();ctx.restore()}else if(b.era===12){drawLuciferBoss(cx,cy,bob,b.pulse)}
-    else{/* Époques 0-9 : le sprite thématique est la seule représentation du boss.
-             Ne pas superposer le cercle générique : il masquait/écrasait les skins. */
-      BossArtRich.draw(b.era,this.colors[b.era]);}
+    else{drawLuciferBoss(cx,cy,bob,b.pulse)}
     ctx.save();ctx.textAlign='center';ctx.fillStyle='#fff';ctx.font='900 16px system-ui';ctx.fillText(b.name,cx,cy+118+bob);ctx.font='700 11px system-ui';ctx.fillStyle=b.era===10?'#b0123f':this.colors[b.era];ctx.fillText('MANCHE '+b.round+' / 3 — '+b.roundHits+'/3 DÉGÂTS',cx,cy+137+bob);ctx.restore();ctx.fillStyle='rgba(0,0,0,.78)';ctx.fillRect(0,0,W,52);ctx.fillRect(0,H-52,W,52);if(b.state==='intro'||b.state==='roundIntro'){ctx.fillStyle='rgba(255,255,255,'+Math.max(0,1-b.t/.35)+')';ctx.fillRect(0,0,W,H)}}};
 window.debugBoss=function(n){n=Math.max(0,Math.min(9,Number(n)||0));if(!G.on)Game.start(n,true);else{G.era=n;G.boss=null;G.bossDefeated=false;G.bossNext=0;G.runTime=0}};
 Stats={update(){if(!Save.d)return;Save.d.stats.points=Math.max(Save.d.stats.points|0,G.score|0);if(G.shield>0)Save.d.stats.shield=1;if(G.magnet>0)Save.d.stats.magnet=1;if(G.x2>0)Save.d.stats.x2=1;if(G.x2>0)Save.d.stats.multiplierMax=Math.max(Save.d.stats.multiplierMax||0,2);if(G.slow<1)Save.d.stats.slow=1;if(G.rings>=4)Save.d.stats.orbit=1;if(G.perfects>=(Save.d.stats.perfects||0))Save.d.stats.perfects=G.perfects;if(G.arcade)Save.d.stats.arcadeBest=Math.max(Save.d.stats.arcadeBest||0,G.score|0)}};
