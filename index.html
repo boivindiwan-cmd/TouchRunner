@@ -99,6 +99,7 @@ input{width:100%;padding:12px;border-radius:10px;border:1px solid rgba(255,255,2
 /* Shop arcade compact, orienté visuel : uniquement ouvert par UI.openSkins en arcade. */
 #skins .panel{max-width:780px}.skinGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:12px}.skinCard{display:flex;flex-direction:column;gap:8px;padding:10px;border:1px solid rgba(255,255,255,.14);border-radius:16px;background:linear-gradient(145deg,#172642,#0b1222)}.skinCard img{width:100%;height:150px;object-fit:contain;filter:drop-shadow(0 8px 8px rgba(0,0,0,.45))}.skinCard.lock{opacity:.62}.skinCard b{font-size:14px}.skinCard small{min-height:34px;line-height:1.25}.skinCard .btn{width:100%}
 </style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 <audio id="bossMusic" preload="auto" loop aria-hidden="true"></audio>
@@ -191,8 +192,22 @@ const PAYPAL_DONATE_URL = 'https://paypal.me/licornebreton';
 // La clé publishable est conservée. Le classement distant est la source de vérité ; le local est un repli hors-ligne.
 const SUPABASE_URL = 'https://esbfxlupnacdbsvghrgw.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_XOa8tjstZQR9VvB-_k6svw_k9ylb9si';
-const SUPABASE_CONFIGURED = SUPABASE_URL !== 'https://TONPROJET.supabase.co' && SUPABASE_KEY !== 'TA_CLE_ANON';
-const SupabaseClient = (() => { try { return SUPABASE_CONFIGURED && window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null; } catch (e) { return null; } })();
+const SUPABASE_CONFIGURED = Boolean(
+  SUPABASE_URL && SUPABASE_KEY &&
+  SUPABASE_URL !== 'https://TONPROJET.supabase.co' &&
+  SUPABASE_KEY !== 'TA_CLE_ANON'
+);
+// Le CDN est chargé avant ce script. Si le réseau/CDN est indisponible, le jeu reste utilisable avec le classement local.
+const SupabaseClient = (() => {
+  try {
+    return SUPABASE_CONFIGURED && window.supabase && typeof window.supabase.createClient === 'function'
+      ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
+      : null;
+  } catch (e) {
+    console.warn('Initialisation Supabase impossible, mode hors-ligne activé', e);
+    return null;
+  }
+})();
 const SALT = 'TR_s4lt_9f3b_2026';
 // Longueur des mondes bonus : 100 = longueur de référence, 50 = moitié, 200 = double.
 // Le score d'arrivée du boss est calculé comme base * pourcentage / 100 (arrondi).
@@ -866,15 +881,21 @@ const Settings={
 
 const Rank={
  async submit(sc){
-  if(sc<=0)return; const name=(Save.d.pseudo||'VIDE').substring(0,15);
-  Save.d.scores.push({p:name,s:sc});Save.d.scores.sort((a,b)=>b.s-a.s);if(Save.d.scores.length>10)Save.d.scores.length=10;Save.save();
-  try{if(SupabaseClient){const r=await SupabaseClient.from('scores').insert({name,score:sc|0});if(r.error)throw r.error;}}catch(e){console.warn('Classement distant indisponible',e);}
+  const score=Number(sc)||0;if(score<=0)return; const name=(Save.d.pseudo||'VIDE').trim().substring(0,15)||'VIDE';
+  // Toujours conserver une copie locale : elle sert de repli si l'appel distant échoue ou si le CDN est bloqué.
+  Save.d.scores.push({p:name,s:score});Save.d.scores.sort((a,b)=>b.s-a.s);if(Save.d.scores.length>10)Save.d.scores.length=10;Save.save();
+  try{
+    if(!SupabaseClient)throw new Error('Supabase indisponible');
+    const r=await SupabaseClient.rpc('upsert_best_score',{p_name:name,p_score:score});
+    if(r.error)throw r.error;
+  }catch(e){console.warn('Classement distant indisponible, repli local utilisé',e);}
  },
  setPseudo(){const p=document.getElementById('pseudo').value.trim().substring(0,15);if(p.length>=1){Save.d.pseudo=p;Save.save();UI.toast('Pseudo enregistré !');this.render();}},
  async render(){
   const l=document.getElementById('rankList'), podium=document.getElementById('podium');l.innerHTML='<div class="sub">Chargement...</div>';podium.innerHTML='';let rows=null;
   try{if(SupabaseClient){const r=await SupabaseClient.from('scores').select('name,score').order('score',{ascending:false}).limit(10);if(r.error)throw r.error;rows=(r.data||[]).map(x=>({p:String(x.name||'VIDE').substring(0,15),s:Number(x.score)||0}));}}catch(e){console.warn('Lecture classement distant impossible',e);rows=null;}
-  if(!rows)rows=Save.d.scores;rows=rows.filter(x=>Number.isFinite(x.s)&&x.s>=0);
+  if(!rows)rows=Save.d.scores;
+  rows=rows.filter(x=>Number.isFinite(Number(x.s))&&Number(x.s)>=0).map(x=>({p:String(x.p||'VIDE').substring(0,15),s:Number(x.s)})).sort((a,b)=>b.s-a.s).slice(0,10);
   if(rows.length){const medals=['🏆','🥈','🥉'];podium.innerHTML=rows.slice(0,3).map((x,i)=>`<div class="podium-slot ${['first','second','third'][i]}"><div class="cup">${medals[i]}</div><div class="podium-name">${String(x.p).replace(/[&<>"']/g,'')}</div><div class="podium-score">${x.s} pts</div><div class="podium-step"></div></div>`).join('');}
   l.innerHTML='';if(rows.length===0){l.innerHTML='<div class="sub">Jouez une partie pour vous classer !</div>';return;}
   rows.forEach((sc,i)=>{l.innerHTML+=`<div class="rank ${sc.p===Save.d.pseudo?'me':''}"><div class="n">#${i+1}</div><div class="p">${String(sc.p).replace(/[&<>"']/g,'')}</div><div class="s">${sc.s}</div></div>`;});
@@ -1037,6 +1058,7 @@ const oldUpdate=Game.update; // retained marker for maintainability
 <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4bc70e2c01a94c73b74392e4234840661791215815920" integrity="sha512-L0ha0OXavK/8okipN9F8BtP84dg9DUhPERbBXzwI6dgTA55d2+yweo3pn5CSFYs45/r8md2+xvUPtTdvTNRfjA==" data-cf-beacon='{"version":"2024.11.0","token":"8607d2a720d14b038279025b2b5a82e5","spa":2}' crossorigin="anonymous"></script>
 <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4bc70e2c01a94c73b74392e4234840661791215815920" integrity="sha512-L0ha0OXavK/8okipN9F8BtP84dg9DUhPERbBXzwI6dgTA55d2+yweo3pn5CSFYs45/r8md2+xvUPtTdvTNRfjA==" data-cf-beacon='{"version":"2024.11.0","token":"8607d2a720d14b038279025b2b5a82e5","spa":2}' crossorigin="anonymous"></script>
 <script>window.__ART_CATALOG__={skins:SKINS.map(s=>({id:s.id,name:s.name,price:s.price,svg:s.svg})),eras:ERAS.slice(0,10).map((e,i)=>({name:e.name,color:e.acc,enemy:EnemyArt.svg(e.name,e.acc),boss:BossArt.svg(i,e.acc)}))};</script>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4bc70e2c01a94c73b74392e4234840661791215815920" integrity="sha512-L0ha0OXavK/8okipN9F8BtP84dg9DUhPERbBXzwI6dgTA55d2+yweo3pn5CSFYs45/r8md2+xvUPtTdvTNRfjA==" data-cf-beacon='{"version":"2024.11.0","token":"8607d2a720d14b038279025b2b5a82e5","spa":2}' crossorigin="anonymous"></script>
 <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4bc70e2c01a94c73b74392e4234840661791215815920" integrity="sha512-L0ha0OXavK/8okipN9F8BtP84dg9DUhPERbBXzwI6dgTA55d2+yweo3pn5CSFYs45/r8md2+xvUPtTdvTNRfjA==" data-cf-beacon='{"version":"2024.11.0","token":"8607d2a720d14b038279025b2b5a82e5","spa":2}' crossorigin="anonymous"></script>
 <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4bc70e2c01a94c73b74392e4234840661791215815920" integrity="sha512-L0ha0OXavK/8okipN9F8BtP84dg9DUhPERbBXzwI6dgTA55d2+yweo3pn5CSFYs45/r8md2+xvUPtTdvTNRfjA==" data-cf-beacon='{"version":"2024.11.0","token":"8607d2a720d14b038279025b2b5a82e5","spa":2}' crossorigin="anonymous"></script>
 <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4bc70e2c01a94c73b74392e4234840661791215815920" integrity="sha512-L0ha0OXavK/8okipN9F8BtP84dg9DUhPERbBXzwI6dgTA55d2+yweo3pn5CSFYs45/r8md2+xvUPtTdvTNRfjA==" data-cf-beacon='{"version":"2024.11.0","token":"8607d2a720d14b038279025b2b5a82e5","spa":2}' crossorigin="anonymous"></script>
